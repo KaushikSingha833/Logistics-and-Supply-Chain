@@ -1,0 +1,263 @@
+-- 1. Create Database
+CREATE DATABASE simple_logistics_plus;
+USE simple_logistics_plus;
+
+-- 2. Users Table (with contact info)
+CREATE TABLE Users (
+    user_id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    email VARCHAR(100) UNIQUE NOT NULL,
+    password VARCHAR(100) NOT NULL, -- Hash in production
+    role ENUM('Admin', 'Customer', 'WarehouseStaff', 'Driver', 'Supplier') NOT NULL,
+    contact VARCHAR(20), -- Phone number
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 3. Products Table (with SKU and category)
+CREATE TABLE Products (
+    product_id INT AUTO_INCREMENT PRIMARY KEY,
+    sku VARCHAR(50) UNIQUE NOT NULL, -- Stock Keeping Unit
+    name VARCHAR(100) NOT NULL,
+    description TEXT,
+    category VARCHAR(50), -- e.g., Electronics, Clothing
+    unit_price DECIMAL(10,2) NOT NULL,
+    reorder_level INT DEFAULT 10 -- Warn when stock < 10
+);
+
+-- 4. Warehouses Table
+CREATE TABLE Warehouses (
+    warehouse_id INT AUTO_INCREMENT PRIMARY KEY,
+    location VARCHAR(255) NOT NULL, -- e.g., "New York"
+    capacity INT NOT NULL -- Total item capacity
+);
+
+-- 5. Inventory Table (stock per warehouse)
+CREATE TABLE Inventory (
+    inventory_id INT AUTO_INCREMENT PRIMARY KEY,
+    product_id INT NOT NULL,
+    warehouse_id INT NOT NULL,
+    quantity INT NOT NULL,
+    last_restock DATE,
+    FOREIGN KEY (product_id) REFERENCES Products(product_id),
+    FOREIGN KEY (warehouse_id) REFERENCES Warehouses(warehouse_id)
+);
+
+-- 6. Suppliers Table
+CREATE TABLE Suppliers (
+    supplier_id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    contact VARCHAR(100) NOT NULL, -- Contact person
+    email VARCHAR(100)
+);
+
+-- 7. Purchase Orders Table (restocking)
+CREATE TABLE PurchaseOrders (
+    po_id INT AUTO_INCREMENT PRIMARY KEY,
+    supplier_id INT NOT NULL,
+    product_id INT NOT NULL,
+    quantity INT NOT NULL,
+    order_date DATE,
+    delivery_date DATE,
+    status ENUM('Pending', 'Delivered') DEFAULT 'Pending',
+    FOREIGN KEY (supplier_id) REFERENCES Suppliers(supplier_id),
+    FOREIGN KEY (product_id) REFERENCES Products(product_id)
+);
+
+-- 8. Orders Table (with tracking ID)
+CREATE TABLE Orders (
+    order_id INT AUTO_INCREMENT PRIMARY KEY,
+    customer_id INT NOT NULL,
+    order_date DATETIME DEFAULT CURRENT_TIMESTAMP,
+    status ENUM('Pending', 'Confirmed', 'Shipped', 'Delivered', 'Cancelled') DEFAULT 'Pending',
+    total_price DECIMAL(10,2),
+    tracking_id VARCHAR(50) UNIQUE, -- For customer tracking
+    FOREIGN KEY (customer_id) REFERENCES Users(user_id)
+);
+
+-- 9. Order Items Table
+CREATE TABLE OrderItems (
+    order_item_id INT AUTO_INCREMENT PRIMARY KEY,
+    order_id INT NOT NULL,
+    product_id INT NOT NULL,
+    quantity INT NOT NULL,
+    price DECIMAL(10,2) NOT NULL, -- Price snapshot at order time
+    FOREIGN KEY (order_id) REFERENCES Orders(order_id),
+    FOREIGN KEY (product_id) REFERENCES Products(product_id)
+);
+
+-- 10. Shipments Table (with carrier info)
+CREATE TABLE Shipments (
+    shipment_id INT AUTO_INCREMENT PRIMARY KEY,
+    order_id INT NOT NULL,
+    warehouse_id INT NOT NULL, -- Origin warehouse
+    carrier VARCHAR(100), -- e.g., "FedEx", "UPS"
+    tracking_number VARCHAR(100),
+    shipment_date DATE,
+    estimated_delivery DATE,
+    actual_delivery DATE,
+    status ENUM('Preparing', 'In Transit', 'Delivered') DEFAULT 'Preparing',
+    FOREIGN KEY (order_id) REFERENCES Orders(order_id),
+    FOREIGN KEY (warehouse_id) REFERENCES Warehouses(warehouse_id)
+);
+
+-- 11. Returns Table
+CREATE TABLE Returns (
+    return_id INT AUTO_INCREMENT PRIMARY KEY,
+    order_id INT NOT NULL,
+    product_id INT NOT NULL,
+    quantity INT NOT NULL,
+    reason TEXT,
+    status ENUM('Pending', 'Approved', 'Rejected') DEFAULT 'Pending',
+    refund_amount DECIMAL(10,2),
+    processed_by INT, -- Admin who processed the return
+    processed_date DATE,
+    FOREIGN KEY (order_id) REFERENCES Orders(order_id),
+    FOREIGN KEY (product_id) REFERENCES Products(product_id),
+    FOREIGN KEY (processed_by) REFERENCES Users(user_id)
+);
+
+-- 12. Audit Logs Table (track key actions)
+CREATE TABLE AuditLogs (
+    log_id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL,
+    action VARCHAR(100) NOT NULL, -- e.g., "UPDATE_ORDER", "ADD_PRODUCT"
+    description TEXT,
+    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES Users(user_id)
+);
+-- Insert a warehouse
+INSERT INTO Users (name, email, password, role, contact, created_at) VALUES
+('Admin User', 'admin@example.com', 'admin123', 'Admin', '+1111111111', '2023-01-01'),
+('John Doe', 'john@example.com', 'john123', 'Customer', '+1222222222', '2023-01-02'),
+('Alice Smith', 'alice@example.com', 'alice123', 'Customer', '+1333333333', '2023-01-03'),
+('Bob Johnson', 'bob@example.com', 'bob123', 'Driver', '+1444444444', '2023-01-04'),
+('Emma Wilson', 'emma@example.com', 'emma123', 'WarehouseStaff', '+1555555555', '2023-01-05'),
+('Tech Supplier', 'supplier@tech.com', 'supplier123', 'Supplier', '+1666666666', '2023-01-06'),
+('Mike Brown', 'mike@example.com', 'mike123', 'Customer', '+1777777777', '2023-01-07'),
+('Sarah Davis', 'sarah@example.com', 'sarah123', 'Driver', '+1888888888', '2023-01-08'),
+('Fashion Supplier', 'supplier@fashion.com', 'supplier456', 'Supplier', '+1999999999', '2023-01-09'),
+('Lucy White', 'lucy@example.com', 'lucy123', 'Customer', '+1000000000', '2023-01-10');
+INSERT INTO Products (sku, name, description, category, unit_price, reorder_level) VALUES
+('LP-1001', 'Laptop', '15-inch, 8GB RAM, 512GB SSD', 'Electronics', 999.99, 5),
+('PH-2001', 'Smartphone', '6.5-inch, 128GB Storage', 'Electronics', 699.99, 10),
+('BK-3001', 'Novel', 'Bestseller Fiction Book', 'Books', 19.99, 20),
+('TS-4001', 'T-Shirt', 'Cotton, Unisex, Size M', 'Clothing', 29.99, 50),
+('HD-5001', 'Headphones', 'Wireless Noise-Canceling', 'Electronics', 199.99, 15),
+('SH-6001', 'Running Shoes', 'Size 10, Breathable', 'Footwear', 89.99, 30),
+('WT-7001', 'Water Bottle', 'Stainless Steel, 1L', 'Accessories', 24.99, 100),
+('TB-8001', 'Tablet', '10-inch, 64GB Storage', 'Electronics', 299.99, 8),
+('BG-9001', 'Backpack', 'Waterproof, 20L', 'Accessories', 49.99, 40),
+('WL-1002', 'Smartwatch', 'Heart Rate Monitor', 'Electronics', 149.99, 12);
+INSERT INTO Warehouses (location, capacity) VALUES
+('New York', 5000),
+('Los Angeles', 6000),
+('Chicago', 4500),
+('Houston', 4000),
+('Miami', 3500),
+('Dallas', 3000),
+('Seattle', 2500),
+('Atlanta', 2000),
+('Denver', 1500),
+('Phoenix', 1000);
+INSERT INTO Inventory (product_id, warehouse_id, quantity, last_restock) VALUES
+(1, 1, 50, '2023-01-15'),
+(2, 2, 100, '2023-02-10'),
+(3, 3, 200, '2023-03-05'),
+(4, 4, 150, '2023-04-20'),
+(5, 5, 80, '2023-05-12'),
+(6, 6, 120, '2023-06-18'),
+(7, 7, 300, '2023-07-01'),
+(8, 8, 60, '2023-08-09'),
+(9, 9, 90, '2023-09-25'),
+(10, 10, 70, '2023-10-30');
+INSERT INTO Suppliers (name, contact, email) VALUES
+('Tech Supplier Inc', 'John Tech', 'contact@techsupplier.com'),
+('Fashion World', 'Anna Fashion', 'info@fashionworld.com'),
+('Book Distributors', 'Mike Books', 'sales@bookdist.com'),
+('Electro Gadgets', 'Sarah Electro', 'support@electro.com'),
+('Sports Gear Co', 'David Sports', 'inquiry@sportsgear.com'),
+('Home Essentials', 'Lucy Home', 'help@homeessentials.com'),
+('Footwear Ltd', 'Bob Shoes', 'contact@footwear.com'),
+('Accessories Pro', 'Emma Accessories', 'sales@accessoriespro.com'),
+('Health Devices', 'Paul Health', 'info@healthdevices.com'),
+('Gadget Hub', 'Olivia Gadget', 'support@gadgethub.com');
+INSERT INTO PurchaseOrders (supplier_id, product_id, quantity, order_date, delivery_date, status) VALUES
+(1, 1, 100, '2023-01-05', '2023-01-15', 'Delivered'),
+(2, 4, 200, '2023-02-10', '2023-02-20', 'Delivered'),
+(3, 3, 300, '2023-03-15', '2023-03-25', 'Delivered'),
+(4, 2, 150, '2023-04-20', '2023-04-30', 'Delivered'),
+(5, 6, 100, '2023-05-25', '2023-06-05', 'Delivered'),
+(6, 7, 500, '2023-06-30', '2023-07-10', 'Delivered'),
+(7, 5, 80, '2023-07-05', '2023-07-15', 'Delivered'),
+(8, 9, 120, '2023-08-10', '2023-08-20', 'Delivered'),
+(9, 10, 90, '2023-09-15', '2023-09-25', 'Delivered'),
+(10, 8, 70, '2023-10-20', '2023-10-30', 'Delivered');
+INSERT INTO Orders (customer_id, order_date, status, total_price, tracking_id) VALUES
+(2, '2023-01-05 10:00:00', 'Delivered', 999.99, 'TRK-1001'),
+(3, '2023-02-10 11:00:00', 'Shipped', 699.99, 'TRK-1002'),
+(7, '2023-03-15 12:00:00', 'Pending', 19.99, 'TRK-1003'),
+(10, '2023-04-20 13:00:00', 'Delivered', 29.99, 'TRK-1004'),
+(2, '2023-05-25 14:00:00', 'Cancelled', 199.99, 'TRK-1005'),
+(7, '2023-06-30 15:00:00', 'Delivered', 89.99, 'TRK-1006'),
+(3, '2023-07-05 16:00:00', 'Shipped', 24.99, 'TRK-1007'),
+(10, '2023-08-10 17:00:00', 'Pending', 299.99, 'TRK-1008'),
+(2, '2023-09-15 18:00:00', 'Delivered', 49.99, 'TRK-1009'),
+(7, '2023-10-20 19:00:00', 'Shipped', 149.99, 'TRK-1010');
+INSERT INTO OrderItems (order_id, product_id, quantity, price) VALUES
+(1, 1, 1, 999.99),
+(2, 2, 1, 699.99),
+(3, 3, 1, 19.99),
+(4, 4, 1, 29.99),
+(5, 5, 1, 199.99),
+(6, 6, 1, 89.99),
+(7, 7, 1, 24.99),
+(8, 8, 1, 299.99),
+(9, 9, 1, 49.99),
+(10, 10, 1, 149.99);
+INSERT INTO Shipments (order_id, warehouse_id, carrier, tracking_number, shipment_date, estimated_delivery, status) VALUES
+(1, 1, 'FedEx', 'FEDEX-1001', '2023-01-06', '2023-01-10', 'Delivered'),
+(2, 2, 'UPS', 'UPS-2001', '2023-02-11', '2023-02-15', 'Delivered'),
+(3, 3, 'USPS', 'USPS-3001', '2023-03-16', '2023-03-20', 'In Transit'),
+(4, 4, 'DHL', 'DHL-4001', '2023-04-21', '2023-04-25', 'Delivered'),
+(5, 5, 'FedEx', 'FEDEX-5001', '2023-05-26', '2023-05-30', 'Cancelled'),
+(6, 6, 'UPS', 'UPS-6001', '2023-07-01', '2023-07-05', 'Delivered'),
+(7, 7, 'USPS', 'USPS-7001', '2023-07-06', '2023-07-10', 'In Transit'),
+(8, 8, 'DHL', 'DHL-8001', '2023-08-11', '2023-08-15', 'Preparing'),
+(9, 9, 'FedEx', 'FEDEX-9001', '2023-09-16', '2023-09-20', 'Delivered'),
+(10, 10, 'UPS', 'UPS-10001', '2023-10-21', '2023-10-25', 'In Transit');
+INSERT INTO Returns (order_id, product_id, quantity, reason, status, refund_amount, processed_by, processed_date) VALUES
+(5, 5, 1, 'Defective product', 'Approved', 199.99, 1, '2023-06-01'),
+(8, 8, 1, 'Wrong item shipped', 'Pending', NULL, NULL, NULL),
+(1, 1, 1, 'No longer needed', 'Rejected', 0.00, 1, '2023-01-20'),
+(4, 4, 1, 'Size mismatch', 'Approved', 29.99, 1, '2023-05-01'),
+(2, 2, 1, 'Damaged during shipping', 'Approved', 699.99, 1, '2023-03-01'),
+(6, 6, 1, 'Change of mind', 'Pending', NULL, NULL, NULL),
+(7, 7, 1, 'Product not as described', 'Approved', 24.99, 1, '2023-08-01'),
+(9, 9, 1, 'Late delivery', 'Rejected', 0.00, 1, '2023-10-01'),
+(3, 3, 1, 'Duplicate order', 'Approved', 19.99, 1, '2023-04-01'),
+(10, 10, 1, 'Faulty device', 'Pending', NULL, NULL, NULL);
+INSERT INTO AuditLogs (user_id, action, description) VALUES
+(1, 'LOGIN', 'Admin User logged in'),
+(2, 'ORDER', 'Order placed by John Doe'),
+(5, 'RESTOCK', 'Inventory updated by Emma Wilson'),
+(4, 'SHIPMENT', 'Shipment assigned to Bob Johnson'),
+(1, 'USER_UPDATE', 'User role updated by Admin'),
+(3, 'ORDER', 'Order placed by Alice Smith'),
+(6, 'PURCHASE_ORDER', 'Purchase order created by Tech Supplier'),
+(9, 'RETURN', 'Return processed by Lucy White'),
+(8, 'SHIPMENT', 'Shipment updated by Sarah Davis'),
+(10, 'ORDER', 'Order placed by Lucy White');
+SELECT p.name, i.quantity, w.location 
+FROM Inventory i
+JOIN Products p ON i.product_id = p.product_id
+JOIN Warehouses w ON i.warehouse_id = w.warehouse_id
+WHERE i.quantity < p.reorder_level;
+SELECT o.tracking_id, s.carrier, s.tracking_number, s.status
+FROM Orders o
+JOIN Shipments s ON o.order_id = s.order_id
+WHERE o.tracking_id = 'TRK-12345';
+UPDATE Returns 
+SET status = 'Approved', refund_amount = 999.99, processed_by = 2, processed_date = CURDATE()
+WHERE return_id = 1;
+-- Example: Count records in Users table
+SELECT COUNT(*) FROM Users; -- Should return 10
